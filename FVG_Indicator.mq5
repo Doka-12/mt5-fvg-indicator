@@ -17,7 +17,7 @@
 
 input int     MaxBarsToScan          = 220;                 // How many recent bars to scan
 input int     MaxFVGPerTF            = 25;                  // Maximum zones per timeframe
-input double  MinGapPoints           = 5.0;                 // Minimum FVG size in points (0 = off)
+input double  MinGapPoints           = 0.0;                 // Minimum FVG size in points (0 = off)
 input bool    ShowBullishFVG         = true;                // Show bullish FVG
 input bool    ShowBearishFVG         = true;                // Show bearish FVG
 input bool    FillZones              = true;                // Fill zones
@@ -271,7 +271,7 @@ void CreateFVGObject(ENUM_TIMEFRAMES tf,
    ObjectSetInteger(0, name, OBJPROP_BACK, 1);
    ObjectSetInteger(0, name, OBJPROP_SELECTABLE, 0);
    ObjectSetInteger(0, name, OBJPROP_SELECTED, 0);
-   ObjectSetInteger(0, name, OBJPROP_HIDDEN, 1);
+   ObjectSetInteger(0, name, OBJPROP_HIDDEN, 0);  // FIXED: Changed from 1 to 0 - NOW VISIBLE!
    ObjectSetInteger(0, name, OBJPROP_COLOR, objColor);
    ObjectSetInteger(0, name, OBJPROP_WIDTH, BorderWidth);
    ObjectSetInteger(0, name, OBJPROP_STYLE, STYLE_SOLID);
