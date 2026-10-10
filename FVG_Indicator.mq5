@@ -3,37 +3,27 @@
 #property indicator_buffers 0
 #property indicator_plots 0
 
-// ==========================================
-// Professional FVG Indicator for MT5
-// ==========================================
-// Rules:
-// - Only active FVGs are shown
-// - If price touched or entered the zone, it is treated as exhausted and hidden
-// - Active zones are extended to the right while price moves
-// - Multi-timeframe support with independent colors
-// ==========================================
-
-input int     MaxBarsToScan          = 220;                 // How many recent bars to scan
-input int     MaxFVGPerTF            = 25;                  // Maximum zones per timeframe
-input double  MinGapPoints           = 0.0;                 // Minimum FVG size in points (0 = off)
-input bool    ShowBullishFVG         = true;                // Show bullish FVG
-input bool    ShowBearishFVG         = true;                // Show bearish FVG
-input bool    FillZones              = true;                // Fill zones
-input int     FillAlpha              = 85;                  // Fill transparency (0..255)
-input int     BorderWidth            = 1;                   // Border width
-input bool    UseCurrentTF           = false;               // Draw also on current chart TF
-input int     LiveExtendBars         = 30;                  // Extend active FVG to the right
-input int     CheckBarsPast          = 30;                  // How many bars back to check if zone has already been touched
+input int     MaxBarsToScan          = 220;
+input int     MaxFVGPerTF            = 25;
+input double  MinGapPoints           = 0.0;
+input bool    ShowBullishFVG         = true;
+input bool    ShowBearishFVG         = true;
+input bool    FillZones              = true;
+input int     FillAlpha              = 85;
+input int     BorderWidth            = 1;
+input bool    UseCurrentTF           = false;
+input int     LiveExtendBars         = 30;
+input int     CheckBarsPast          = 5;
 
 // Current timeframe colors
-input color   BullishColor           = clrDodgerBlue;       // Bullish FVG color
-input color   BearishColor           = clrTomato;           // Bearish FVG color
+input color   BullishColor           = clrDodgerBlue;
+input color   BearishColor           = clrTomato;
 
 // Multi-timeframe selection
-input bool    ShowTF_H4              = true;                // Show H4 FVG
-input bool    ShowTF_D1              = true;                // Show D1 FVG
-input bool    ShowTF_W1              = true;                // Show W1 FVG
-input bool    ShowTF_MN1             = false;               // Show MN1 FVG
+input bool    ShowTF_H4              = true;
+input bool    ShowTF_D1              = true;
+input bool    ShowTF_W1              = true;
+input bool    ShowTF_MN1             = false;
 
 // H4 colors
 input color   TF_H4_BullColor        = clrSkyBlue;
@@ -131,7 +121,7 @@ void DrawTimeframe(ENUM_TIMEFRAMES tf,
             if(gapSize < MinGapPoints * _Point && MinGapPoints > 0.0)
                continue;
 
-            if(WasTouched(tf, idx, true, zoneBottom, zoneTop))
+            if(WasTouchedRecently(tf, zoneBottom, zoneTop))
                continue;
 
             CreateFVGObject(tf, true, idx, timeLeft, timeRight, zoneTop, zoneBottom, bullColor);
@@ -154,7 +144,7 @@ void DrawTimeframe(ENUM_TIMEFRAMES tf,
             if(gapSize < MinGapPoints * _Point && MinGapPoints > 0.0)
                continue;
 
-            if(WasTouched(tf, idx, false, zoneBottom, zoneTop))
+            if(WasTouchedRecently(tf, zoneBottom, zoneTop))
                continue;
 
             CreateFVGObject(tf, false, idx, timeLeft, timeRight, zoneTop, zoneBottom, bearColor);
@@ -212,38 +202,22 @@ bool IsBearishFVG(ENUM_TIMEFRAMES tf,
    return(true);
 }
 
-bool WasTouched(ENUM_TIMEFRAMES tf,
-                const int idx,
-                const bool bullish,
-                const double zoneBottom,
-                const double zoneTop)
+bool WasTouchedRecently(ENUM_TIMEFRAMES tf,
+                        const double zoneBottom,
+                        const double zoneTop)
 {
-   int barsLimit = iBars(_Symbol, tf);
-   if(barsLimit <= idx + 1)
+   int barsTotal = iBars(_Symbol, tf);
+   if(barsTotal <= 0)
       return(false);
 
-   int startCheck = MathMax(0, idx - CheckBarsPast);
-   int endCheck = MathMin(barsLimit - 1, idx + CheckBarsPast);
+   int checkBars = MathMin(CheckBarsPast, barsTotal - 1);
 
-   for(int j = startCheck; j <= endCheck; j++)
+   for(int j = 0; j < checkBars; j++)
    {
       double low = iLow(_Symbol, tf, j);
       double high = iHigh(_Symbol, tf, j);
-      double close = iClose(_Symbol, tf, j);
 
-      if(bullish)
-      {
-         if(high >= zoneBottom && low <= zoneTop)
-            return(true);
-      }
-      else
-      {
-         if(high >= zoneBottom && low <= zoneTop)
-            return(true);
-      }
-
-      // Also treat a full candle close inside the zone as touched
-      if(close > zoneBottom && close < zoneTop)
+      if(low <= zoneBottom && high >= zoneTop)
          return(true);
    }
 
