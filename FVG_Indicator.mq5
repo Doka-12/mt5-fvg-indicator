@@ -24,9 +24,9 @@ input bool    FillZones              = true;                // Fill zones
 input int     FillAlpha              = 85;                  // Fill transparency (0..255)
 input int     BorderWidth            = 1;                   // Border width
 input bool    UseCurrentTF           = false;               // Draw also on current chart TF
-input bool    AutoHideExhausted      = true;                // Hide exhausted FVGs automatically
-input int     LiveExtendBars         = 30;                  // Extend active FVG to the right by this many bars
-input int     ExhaustionBars         = 60;                  // Bars ahead to check whether the zone was exhausted
+input bool    AutoHideExhausted      = true;                // Hide exhausted FVGs
+input int     LiveExtendBars         = 30;                  // Extend active FVG to the right
+input int     ExhaustionBars         = 60;                  // Bars ahead to check exhaustion
 
 // ==========================================
 // Current timeframe colors
@@ -35,22 +35,26 @@ input color   BullishColor           = clrDodgerBlue;       // Bullish FVG color
 input color   BearishColor           = clrTomato;           // Bearish FVG color
 
 // ==========================================
-// Multi-TF colors
+// Multi-timeframe selection
 // ==========================================
 input bool    ShowTF_H4              = true;                // Show H4 FVG
 input bool    ShowTF_D1              = true;                // Show D1 FVG
 input bool    ShowTF_W1              = true;                // Show W1 FVG
 input bool    ShowTF_MN1             = false;               // Show MN1 FVG
 
+// H4 colors
 input color   TF_H4_BullColor        = clrSkyBlue;
 input color   TF_H4_BearColor        = clrTomato;
 
+// D1 colors
 input color   TF_D1_BullColor        = clrDeepSkyBlue;
 input color   TF_D1_BearColor        = clrFireBrick;
 
+// W1 colors
 input color   TF_W1_BullColor        = clrGoldenrod;
 input color   TF_W1_BearColor        = clrOrangeRed;
 
+// MN1 colors
 input color   TF_MN1_BullColor       = clrSlateGray;
 input color   TF_MN1_BearColor       = clrLightCoral;
 
