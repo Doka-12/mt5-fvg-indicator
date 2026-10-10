@@ -3,43 +3,27 @@
 #property indicator_buffers 0
 #property indicator_plots 0
 
-input int     MaxBarsToScan          = 220;
-input int     MaxFVGPerTF            = 25;
-input double  MinGapPoints           = 0.0;
+input int     MaxBarsToScan          = 500;
+input int     MaxFVGPerTF            = 50;
 input bool    ShowBullishFVG         = true;
 input bool    ShowBearishFVG         = true;
 input bool    FillZones              = true;
 input int     FillAlpha              = 85;
-input int     BorderWidth            = 1;
-input bool    UseCurrentTF           = false;
-input int     LiveExtendBars         = 30;
-input int     CheckBarsPast          = 5;
+input int     BorderWidth            = 2;
 
-// Current timeframe colors
-input color   BullishColor           = clrDodgerBlue;
-input color   BearishColor           = clrTomato;
-
-// Multi-timeframe selection
 input bool    ShowTF_H4              = true;
 input bool    ShowTF_D1              = true;
 input bool    ShowTF_W1              = true;
 input bool    ShowTF_MN1             = false;
 
-// H4 colors
+input color   BullishColor           = clrDodgerBlue;
+input color   BearishColor           = clrTomato;
 input color   TF_H4_BullColor        = clrSkyBlue;
-input color   TF_H4_BearColor        = clrTomato;
-
-// D1 colors
+input color   TF_H4_BearColor        = clrLightSalmon;
 input color   TF_D1_BullColor        = clrDeepSkyBlue;
 input color   TF_D1_BearColor        = clrFireBrick;
-
-// W1 colors
 input color   TF_W1_BullColor        = clrGoldenrod;
 input color   TF_W1_BearColor        = clrOrangeRed;
-
-// MN1 colors
-input color   TF_MN1_BullColor       = clrSlateGray;
-input color   TF_MN1_BearColor       = clrLightCoral;
 
 const string gPrefix = "FVG_";
 
@@ -76,12 +60,6 @@ void DrawAllFVG()
 {
    ObjectsDeleteAll(0, gPrefix);
 
-   if(MaxBarsToScan <= 0)
-      return;
-
-   if(UseCurrentTF)
-      DrawTimeframe(_Period, BullishColor, BearishColor);
-
    if(ShowTF_H4)
       DrawTimeframe(PERIOD_H4, TF_H4_BullColor, TF_H4_BearColor);
 
@@ -92,7 +70,7 @@ void DrawAllFVG()
       DrawTimeframe(PERIOD_W1, TF_W1_BullColor, TF_W1_BearColor);
 
    if(ShowTF_MN1)
-      DrawTimeframe(PERIOD_MN1, TF_MN1_BullColor, TF_MN1_BearColor);
+      DrawTimeframe(PERIOD_MN1, clrSlateGray, clrLightCoral);
 }
 
 void DrawTimeframe(ENUM_TIMEFRAMES tf,
@@ -104,142 +82,67 @@ void DrawTimeframe(ENUM_TIMEFRAMES tf,
       return;
 
    int scannedBars = MathMin(MaxBarsToScan, barsTotal - 2);
-   int count = 0;
+   int bullCount = 0;
+   int bearCount = 0;
 
-   for(int idx = 0; idx < scannedBars && count < MaxFVGPerTF; idx++)
+   for(int idx = 0; idx < scannedBars; idx++)
    {
-      if(ShowBullishFVG)
+      if(idx + 2 >= barsTotal)
+         break;
+
+      // Bullish FVG: текущий low > предыдущий high (на 2 бара назад)
+      if(ShowBullishFVG && bullCount < MaxFVGPerTF)
       {
-         double zoneTop = 0.0;
-         double zoneBottom = 0.0;
-         datetime timeLeft = 0;
-         datetime timeRight = 0;
+         double low0 = iLow(_Symbol, tf, idx);
+         double high2 = iHigh(_Symbol, tf, idx + 2);
 
-         if(IsBullishFVG(tf, idx, zoneTop, zoneBottom, timeLeft, timeRight))
+         if(low0 > high2)
          {
-            double gapSize = MathAbs(zoneTop - zoneBottom);
-            if(gapSize < MinGapPoints * _Point && MinGapPoints > 0.0)
-               continue;
+            double zoneTop = low0;
+            double zoneBottom = high2;
+            datetime timeLeft = iTime(_Symbol, tf, idx + 2);
+            datetime timeRight = iTime(_Symbol, tf, idx);
 
-            if(WasTouchedRecently(tf, zoneBottom, zoneTop))
-               continue;
-
-            CreateFVGObject(tf, true, idx, timeLeft, timeRight, zoneTop, zoneBottom, bullColor);
-            count++;
-            if(count >= MaxFVGPerTF)
-               break;
+            CreateFVGRect(tf, true, idx, timeLeft, timeRight, zoneTop, zoneBottom, bullColor);
+            bullCount++;
          }
       }
 
-      if(ShowBearishFVG)
+      // Bearish FVG: текущий high < предыдущий low (на 2 бара назад)
+      if(ShowBearishFVG && bearCount < MaxFVGPerTF)
       {
-         double zoneTop = 0.0;
-         double zoneBottom = 0.0;
-         datetime timeLeft = 0;
-         datetime timeRight = 0;
+         double high0 = iHigh(_Symbol, tf, idx);
+         double low2 = iLow(_Symbol, tf, idx + 2);
 
-         if(IsBearishFVG(tf, idx, zoneTop, zoneBottom, timeLeft, timeRight))
+         if(high0 < low2)
          {
-            double gapSize = MathAbs(zoneTop - zoneBottom);
-            if(gapSize < MinGapPoints * _Point && MinGapPoints > 0.0)
-               continue;
+            double zoneTop = low2;
+            double zoneBottom = high0;
+            datetime timeLeft = iTime(_Symbol, tf, idx + 2);
+            datetime timeRight = iTime(_Symbol, tf, idx);
 
-            if(WasTouchedRecently(tf, zoneBottom, zoneTop))
-               continue;
-
-            CreateFVGObject(tf, false, idx, timeLeft, timeRight, zoneTop, zoneBottom, bearColor);
-            count++;
-            if(count >= MaxFVGPerTF)
-               break;
+            CreateFVGRect(tf, false, idx, timeLeft, timeRight, zoneTop, zoneBottom, bearColor);
+            bearCount++;
          }
       }
+
+      if(bullCount >= MaxFVGPerTF && bearCount >= MaxFVGPerTF)
+         break;
    }
 }
 
-bool IsBullishFVG(ENUM_TIMEFRAMES tf,
-                  const int idx,
-                  double &zoneTop,
-                  double &zoneBottom,
-                  datetime &leftTime,
-                  datetime &rightTime)
-{
-   if(idx + 2 >= iBars(_Symbol, tf))
-      return(false);
-
-   double currentLow = iLow(_Symbol, tf, idx);
-   double earlierHigh = iHigh(_Symbol, tf, idx + 2);
-
-   if(currentLow <= earlierHigh)
-      return(false);
-
-   zoneTop = currentLow;
-   zoneBottom = earlierHigh;
-   leftTime = iTime(_Symbol, tf, idx + 2);
-   rightTime = iTime(_Symbol, tf, idx);
-   return(true);
-}
-
-bool IsBearishFVG(ENUM_TIMEFRAMES tf,
-                  const int idx,
-                  double &zoneTop,
-                  double &zoneBottom,
-                  datetime &leftTime,
-                  datetime &rightTime)
-{
-   if(idx + 2 >= iBars(_Symbol, tf))
-      return(false);
-
-   double currentHigh = iHigh(_Symbol, tf, idx);
-   double earlierLow = iLow(_Symbol, tf, idx + 2);
-
-   if(currentHigh >= earlierLow)
-      return(false);
-
-   zoneTop = earlierLow;
-   zoneBottom = currentHigh;
-   leftTime = iTime(_Symbol, tf, idx + 2);
-   rightTime = iTime(_Symbol, tf, idx);
-   return(true);
-}
-
-bool WasTouchedRecently(ENUM_TIMEFRAMES tf,
-                        const double zoneBottom,
-                        const double zoneTop)
-{
-   int barsTotal = iBars(_Symbol, tf);
-   if(barsTotal <= 0)
-      return(false);
-
-   int checkBars = MathMin(CheckBarsPast, barsTotal - 1);
-
-   for(int j = 0; j < checkBars; j++)
-   {
-      double low = iLow(_Symbol, tf, j);
-      double high = iHigh(_Symbol, tf, j);
-
-      if(low <= zoneBottom && high >= zoneTop)
-         return(true);
-   }
-
-   return(false);
-}
-
-void CreateFVGObject(ENUM_TIMEFRAMES tf,
-                     const bool bullish,
-                     const int idx,
-                     const datetime timeLeft,
-                     const datetime timeRight,
-                     const double zoneTop,
-                     const double zoneBottom,
-                     const color objColor)
+void CreateFVGRect(ENUM_TIMEFRAMES tf,
+                   const bool bullish,
+                   const int idx,
+                   const datetime timeLeft,
+                   const datetime timeRight,
+                   const double zoneTop,
+                   const double zoneBottom,
+                   const color objColor)
 {
    string name = StringFormat("%sTF%d_%s_%d", gPrefix, (int)tf, bullish ? "B" : "S", idx);
-   if(ObjectFind(0, name) >= 0)
-      return;
-
-   datetime extendRight = timeRight + LiveExtendBars * PeriodSeconds(tf);
-
-   if(!ObjectCreate(0, name, OBJ_RECTANGLE, 0, timeLeft, zoneTop, extendRight, zoneBottom))
+   
+   if(!ObjectCreate(0, name, OBJ_RECTANGLE, 0, timeLeft, zoneTop, timeRight, zoneBottom))
       return;
 
    ObjectSetInteger(0, name, OBJPROP_BACK, 1);
@@ -253,7 +156,7 @@ void CreateFVGObject(ENUM_TIMEFRAMES tf,
    if(FillZones)
    {
       ObjectSetInteger(0, name, OBJPROP_FILL, 1);
-      ObjectSetInteger(0, name, OBJPROP_BGCOLOR, ColorToARGB(objColor, FillAlpha));
+      ObjectSetInteger(0, name, OBJPROP_BGCOLOR, ColorWithAlpha(objColor, FillAlpha));
    }
    else
    {
@@ -261,10 +164,9 @@ void CreateFVGObject(ENUM_TIMEFRAMES tf,
    }
 }
 
-color ColorToARGB(const color inputColor, const int alpha)
+color ColorWithAlpha(color c, int alpha)
 {
-   int a = alpha;
-   if(a < 0) a = 0;
-   if(a > 255) a = 255;
-   return((color)((a << 24) | (inputColor & 0x00FFFFFF)));
+   if(alpha < 0) alpha = 0;
+   if(alpha > 255) alpha = 255;
+   return((color)((alpha << 24) | (c & 0x00FFFFFF)));
 }
