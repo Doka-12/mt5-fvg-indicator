@@ -9,10 +9,11 @@
 // Features:
 // - Multi-timeframe FVG detection (H4, D1, W1, MN1)
 // - Bullish / bearish colors
-// - Exhausted FVG colors
 // - Min gap filter
 // - Optimized drawing with limited zones
 // - Clean chart rendering without excessive load
+// - FVG extends to the right with price movement
+// - Exhausted zones are hidden instead of recolored
 // ==========================================
 
 input int     MaxBarsToScan          = 220;                 // How many recent bars to scan
@@ -20,20 +21,17 @@ input int     MaxFVGPerTF            = 25;                  // Maximum zones per
 input double  MinGapPoints           = 0.0;                 // Minimum FVG size in points (0 = off)
 input bool    ShowBullishFVG         = true;                // Show bullish FVG
 input bool    ShowBearishFVG         = true;                // Show bearish FVG
-input bool    HighlightExhausted     = true;                // Highlight exhausted FVG
 input bool    FillZones              = true;                // Fill zones
 input int     FillAlpha              = 85;                  // Fill transparency (0..255)
 input int     BorderWidth            = 1;                   // Border width
-input int     ExhaustionBars         = 60;                  // Bars ahead to check if zone was exhausted
 input bool    UseCurrentTF           = false;               // Draw also on current chart TF
+input int     LiveExtendBars         = 30;                  // How many bars to extend the FVG to the right while price moves
 
 // ==========================================
 // Current timeframe colors
 // ==========================================
 input color   BullishColor           = clrDodgerBlue;       // Bullish FVG color
 input color   BearishColor           = clrTomato;           // Bearish FVG color
-input color   ExhaustedBullishColor  = clrLimeGreen;        // Exhausted bullish FVG color
-input color   ExhaustedBearishColor  = clrDarkOrange;       // Exhausted bearish FVG color
 
 // ==========================================
 // Multi-TF colors
@@ -45,23 +43,15 @@ input bool    ShowTF_MN1             = false;               // Show MN1 FVG
 
 input color   TF_H4_BullColor        = clrSkyBlue;
 input color   TF_H4_BearColor        = clrTomato;
-input color   TF_H4_ExBullColor      = clrLimeGreen;
-input color   TF_H4_ExBearColor      = clrDarkOrange;
 
 input color   TF_D1_BullColor        = clrDeepSkyBlue;
 input color   TF_D1_BearColor        = clrFireBrick;
-input color   TF_D1_ExBullColor      = clrLimeGreen;
-input color   TF_D1_ExBearColor      = clrOrangeRed;
 
 input color   TF_W1_BullColor        = clrGoldenrod;
 input color   TF_W1_BearColor        = clrOrangeRed;
-input color   TF_W1_ExBullColor      = clrLimeGreen;
-input color   TF_W1_ExBearColor      = clrDarkOrange;
 
 input color   TF_MN1_BullColor       = clrSlateGray;
 input color   TF_MN1_BearColor       = clrLightCoral;
-input color   TF_MN1_ExBullColor     = clrLimeGreen;
-input color   TF_MN1_ExBearColor     = clrDarkOrange;
 
 const string gPrefix = "FVG_";
 
@@ -102,26 +92,24 @@ void DrawAllFVG()
       return;
 
    if(UseCurrentTF)
-      DrawTimeframe(_Period, BullishColor, BearishColor, ExhaustedBullishColor, ExhaustedBearishColor);
+      DrawTimeframe(_Period, BullishColor, BearishColor);
 
    if(ShowTF_H4)
-      DrawTimeframe(PERIOD_H4, TF_H4_BullColor, TF_H4_BearColor, TF_H4_ExBullColor, TF_H4_ExBearColor);
+      DrawTimeframe(PERIOD_H4, TF_H4_BullColor, TF_H4_BearColor);
 
    if(ShowTF_D1)
-      DrawTimeframe(PERIOD_D1, TF_D1_BullColor, TF_D1_BearColor, TF_D1_ExBullColor, TF_D1_ExBearColor);
+      DrawTimeframe(PERIOD_D1, TF_D1_BullColor, TF_D1_BearColor);
 
    if(ShowTF_W1)
-      DrawTimeframe(PERIOD_W1, TF_W1_BullColor, TF_W1_BearColor, TF_W1_ExBullColor, TF_W1_ExBearColor);
+      DrawTimeframe(PERIOD_W1, TF_W1_BullColor, TF_W1_BearColor);
 
    if(ShowTF_MN1)
-      DrawTimeframe(PERIOD_MN1, TF_MN1_BullColor, TF_MN1_BearColor, TF_MN1_ExBullColor, TF_MN1_ExBearColor);
+      DrawTimeframe(PERIOD_MN1, TF_MN1_BullColor, TF_MN1_BearColor);
 }
 
 void DrawTimeframe(ENUM_TIMEFRAMES tf,
-                  const color bullColor,
-                  const color bearColor,
-                  const color bullExhaustedColor,
-                  const color bearExhaustedColor)
+                   const color bullColor,
+                   const color bearColor)
 {
    int barsTotal = iBars(_Symbol, tf);
    if(barsTotal < 4)
@@ -145,9 +133,11 @@ void DrawTimeframe(ENUM_TIMEFRAMES tf,
             if(gapSize < MinGapPoints * _Point && MinGapPoints > 0.0)
                continue;
 
-            bool exhausted = HighlightExhausted && IsZoneExhausted(tf, idx, true, zoneBottom, zoneTop);
-            color zoneColor = exhausted ? bullExhaustedColor : bullColor;
-            CreateFVGObject(tf, true, idx, timeLeft, timeRight, zoneTop, zoneBottom, zoneColor);
+            // Ignore exhausted FVGs completely
+            if(IsZoneExhausted(tf, idx, true, zoneBottom, zoneTop))
+               continue;
+
+            CreateFVGObject(tf, true, idx, timeLeft, timeRight, zoneTop, zoneBottom, bullColor);
             count++;
             if(count >= MaxFVGPerTF)
                break;
@@ -167,9 +157,11 @@ void DrawTimeframe(ENUM_TIMEFRAMES tf,
             if(gapSize < MinGapPoints * _Point && MinGapPoints > 0.0)
                continue;
 
-            bool exhausted = HighlightExhausted && IsZoneExhausted(tf, idx, false, zoneBottom, zoneTop);
-            color zoneColor = exhausted ? bearExhaustedColor : bearColor;
-            CreateFVGObject(tf, false, idx, timeLeft, timeRight, zoneTop, zoneBottom, zoneColor);
+            // Ignore exhausted FVGs completely
+            if(IsZoneExhausted(tf, idx, false, zoneBottom, zoneTop))
+               continue;
+
+            CreateFVGObject(tf, false, idx, timeLeft, timeRight, zoneTop, zoneBottom, bearColor);
             count++;
             if(count >= MaxFVGPerTF)
                break;
@@ -268,7 +260,9 @@ void CreateFVGObject(ENUM_TIMEFRAMES tf,
    if(ObjectFind(0, name) >= 0)
       return;
 
-   if(!ObjectCreate(0, name, OBJ_RECTANGLE, 0, timeLeft, zoneTop, timeRight, zoneBottom))
+   datetime extendRight = timeRight + LiveExtendBars * PeriodSeconds(tf);
+
+   if(!ObjectCreate(0, name, OBJ_RECTANGLE, 0, timeLeft, zoneTop, extendRight, zoneBottom))
       return;
 
    ObjectSetInteger(0, name, OBJPROP_BACK, 1);
