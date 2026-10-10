@@ -9,23 +9,24 @@
 // Features:
 // - Multi-timeframe FVG detection (H4, D1, W1, MN1)
 // - Bullish / bearish colors
-// - Min gap filter
-// - Optimized drawing with limited zones
-// - Clean chart rendering without excessive load
-// - FVG extends to the right with price movement
-// - Exhausted zones are hidden instead of recolored
+// - Dynamic right-side extension while price keeps moving
+// - Exhausted zones are hidden automatically
+// - Minimum gap filter in points for cleaner entries
+// - Smart limits to reduce terminal load
 // ==========================================
 
 input int     MaxBarsToScan          = 220;                 // How many recent bars to scan
 input int     MaxFVGPerTF            = 25;                  // Maximum zones per timeframe
-input double  MinGapPoints           = 0.0;                 // Minimum FVG size in points (0 = off)
+input double  MinGapPoints           = 5.0;                 // Minimum FVG size in points (0 = off)
 input bool    ShowBullishFVG         = true;                // Show bullish FVG
 input bool    ShowBearishFVG         = true;                // Show bearish FVG
 input bool    FillZones              = true;                // Fill zones
 input int     FillAlpha              = 85;                  // Fill transparency (0..255)
 input int     BorderWidth            = 1;                   // Border width
 input bool    UseCurrentTF           = false;               // Draw also on current chart TF
-input int     LiveExtendBars         = 30;                  // How many bars to extend the FVG to the right while price moves
+input bool    AutoHideExhausted      = true;                // Hide exhausted FVGs automatically
+input int     LiveExtendBars         = 30;                  // Extend active FVG to the right by this many bars
+input int     ExhaustionBars         = 60;                  // Bars ahead to check whether the zone was exhausted
 
 // ==========================================
 // Current timeframe colors
@@ -133,8 +134,7 @@ void DrawTimeframe(ENUM_TIMEFRAMES tf,
             if(gapSize < MinGapPoints * _Point && MinGapPoints > 0.0)
                continue;
 
-            // Ignore exhausted FVGs completely
-            if(IsZoneExhausted(tf, idx, true, zoneBottom, zoneTop))
+            if(AutoHideExhausted && IsZoneExhausted(tf, idx, true, zoneBottom, zoneTop))
                continue;
 
             CreateFVGObject(tf, true, idx, timeLeft, timeRight, zoneTop, zoneBottom, bullColor);
@@ -157,8 +157,7 @@ void DrawTimeframe(ENUM_TIMEFRAMES tf,
             if(gapSize < MinGapPoints * _Point && MinGapPoints > 0.0)
                continue;
 
-            // Ignore exhausted FVGs completely
-            if(IsZoneExhausted(tf, idx, false, zoneBottom, zoneTop))
+            if(AutoHideExhausted && IsZoneExhausted(tf, idx, false, zoneBottom, zoneTop))
                continue;
 
             CreateFVGObject(tf, false, idx, timeLeft, timeRight, zoneTop, zoneBottom, bearColor);
