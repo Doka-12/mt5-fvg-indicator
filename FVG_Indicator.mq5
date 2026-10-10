@@ -3,38 +3,58 @@
 #property indicator_buffers 0
 #property indicator_plots 0
 
-input int    FVGLookbackBars        = 200;                  // How many recent candles to scan for FVG
-input bool   ShowBullishFVG         = true;                 // Show bullish FVG
-input bool   ShowBearishFVG         = true;                 // Show bearish FVG
-input color  BullishFVGColor        = clrDodgerBlue;        // Bullish FVG color
-input color  BearishFVGColor        = clrTomato;            // Bearish FVG color
-input bool   HighlightExhausted     = true;                 // Highlight exhausted FVG zones with another color
-input color  BullishExhaustedColor  = clrLimeGreen;         // Exhausted bullish FVG color
-input color  BearishExhaustedColor  = clrDarkOrange;        // Exhausted bearish FVG color
-input int    FVGBorderWidth         = 1;                    // Border width for FVG zones
-input bool   FillZones              = true;                 // Fill the FVG zone
-input int    FillTransparency       = 85;                   // Fill transparency: 0..255
-input bool   ShowTF_H4              = true;                 // Search FVG on H4
-input color  TF_H4_Color            = clrAqua;              // H4 FVG color
-input bool   ShowTF_D1              = true;                 // Search FVG on D1
-input color  TF_D1_Color            = clrGold;              // D1 FVG color
-input bool   ShowTF_W1              = true;                 // Search FVG on W1
-input color  TF_W1_Color            = clrOrange;            // W1 FVG color
-input bool   ShowTF_MN1             = false;                // Search FVG on MN1
-input color  TF_MN1_Color           = clrDarkGray;          // MN1 FVG color
-input int    ExhaustionCheckBars    = 80;                   // How far forward to check whether the zone was exhausted
+input int     MaxBarsToScan           = 220;                  // How many recent candles to scan for FVGs
+input int     MaxFVGPerTF             = 40;                   // Maximum FVG rectangles per timeframe
+input bool    ShowBullishFVG          = true;                 // Draw bullish FVGs
+input bool    ShowBearishFVG          = true;                 // Draw bearish FVGs
+input bool    HighlightExhausted      = true;                 // Highlight already used FVGs with a different color
+input bool    FillZones               = true;                 // Fill the FVG rectangle
+input int     FillAlpha              = 85;                   // Fill transparency: 0..255
+input int     BorderWidth            = 1;                    // Border width of the FVG zone
+input int     ExhaustionBars         = 60;                   // How many bars forward to check whether the FVG was exhausted
 
-string g_prefix = "FVG_";
+input bool    UseCurrentTF            = false;                // Show FVGs on the current chart timeframe too
+input color   BullishColor            = clrDodgerBlue;        // Standard bullish FVG color
+input color   BearishColor            = clrTomato;            // Standard bearish FVG color
+input color   ExhaustedBullishColor   = clrLimeGreen;         // Exhausted bullish FVG color
+input color   ExhaustedBearishColor   = clrDarkOrange;        // Exhausted bearish FVG color
+
+input bool    ShowTF_H4               = true;                 // Show FVGs from H4
+input bool    ShowTF_D1               = true;                 // Show FVGs from D1
+input bool    ShowTF_W1               = true;                 // Show FVGs from W1
+input bool    ShowTF_MN1              = false;                // Show FVGs from MN1
+
+input color   TF_H4_BullColor         = clrSkyBlue;           // H4 bullish FVG color
+input color   TF_H4_BearColor         = clrTomato;            // H4 bearish FVG color
+input color   TF_H4_ExBullColor       = clrLimeGreen;         // H4 exhausted bullish color
+input color   TF_H4_ExBearColor       = clrDarkOrange;        // H4 exhausted bearish color
+
+input color   TF_D1_BullColor         = clrDeepSkyBlue;       // D1 bullish FVG color
+input color   TF_D1_BearColor         = clrFireBrick;         // D1 bearish FVG color
+input color   TF_D1_ExBullColor       = clrLimeGreen;         // D1 exhausted bullish color
+input color   TF_D1_ExBearColor       = clrOrangeRed;         // D1 exhausted bearish color
+
+input color   TF_W1_BullColor         = clrGoldenrod;         // W1 bullish FVG color
+input color   TF_W1_BearColor         = clrOrangeRed;          // W1 bearish FVG color
+input color   TF_W1_ExBullColor       = clrLimeGreen;         // W1 exhausted bullish color
+input color   TF_W1_ExBearColor       = clrDarkOrange;        // W1 exhausted bearish color
+
+input color   TF_MN1_BullColor        = clrSlateGray;         // MN1 bullish FVG color
+input color   TF_MN1_BearColor        = clrLightCoral;        // MN1 bearish FVG color
+input color   TF_MN1_ExBullColor      = clrLimeGreen;         // MN1 exhausted bullish color
+input color   TF_MN1_ExBearColor      = clrDarkOrange;        // MN1 exhausted bearish color
+
+const string gPrefix = "FVG_";
 
 int OnInit()
 {
-   ObjectsDeleteAll(0, g_prefix);
+   ObjectsDeleteAll(0, gPrefix);
    return(INIT_SUCCEEDED);
 }
 
 void OnDeinit(const int reason)
 {
-   ObjectsDeleteAll(0, g_prefix);
+   ObjectsDeleteAll(0, gPrefix);
 }
 
 int OnCalculate(const int rates_total,
@@ -48,148 +68,209 @@ int OnCalculate(const int rates_total,
                 const long &volume[],
                 const int &spread[])
 {
-   RefreshFVG();
+   if(rates_total < 4)
+      return(rates_total);
+
+   DrawAllFVG();
    return(rates_total);
 }
 
-void RefreshFVG()
+void DrawAllFVG()
 {
-   if(!IsStopped())
-      ObjectsDeleteAll(0, g_prefix);
+   ObjectsDeleteAll(0, gPrefix);
 
-   if(FVGLookbackBars <= 0)
+   if(MaxBarsToScan <= 0)
       return;
 
-   if(ShowBullishFVG)
+   if(UseCurrentTF)
    {
-      ScanTimeframe(PERIOD_H4, TF_H4_Color, true, ShowTF_H4);
-      ScanTimeframe(PERIOD_D1, TF_D1_Color, true, ShowTF_D1);
-      ScanTimeframe(PERIOD_W1, TF_W1_Color, true, ShowTF_W1);
-      ScanTimeframe(PERIOD_MN1, TF_MN1_Color, true, ShowTF_MN1);
+      DrawTimeframe(_Period, BullishColor, BearishColor, ExhaustedBullishColor, ExhaustedBearishColor);
    }
 
-   if(ShowBearishFVG)
-   {
-      ScanTimeframe(PERIOD_H4, TF_H4_Color, false, ShowTF_H4);
-      ScanTimeframe(PERIOD_D1, TF_D1_Color, false, ShowTF_D1);
-      ScanTimeframe(PERIOD_W1, TF_W1_Color, false, ShowTF_W1);
-      ScanTimeframe(PERIOD_MN1, TF_MN1_Color, false, ShowTF_MN1);
-   }
+   if(ShowTF_H4)
+      DrawTimeframe(PERIOD_H4, TF_H4_BullColor, TF_H4_BearColor, TF_H4_ExBullColor, TF_H4_ExBearColor);
+
+   if(ShowTF_D1)
+      DrawTimeframe(PERIOD_D1, TF_D1_BullColor, TF_D1_BearColor, TF_D1_ExBullColor, TF_D1_ExBearColor);
+
+   if(ShowTF_W1)
+      DrawTimeframe(PERIOD_W1, TF_W1_BullColor, TF_W1_BearColor, TF_W1_ExBullColor, TF_W1_ExBearColor);
+
+   if(ShowTF_MN1)
+      DrawTimeframe(PERIOD_MN1, TF_MN1_BullColor, TF_MN1_BearColor, TF_MN1_ExBullColor, TF_MN1_ExBearColor);
 }
 
-void ScanTimeframe(const int tf, const color colorForTF, const bool bullish, const bool enabled)
+void DrawTimeframe(const int tf,
+                  const color bullColor,
+                  const color bearColor,
+                  const color bullExhaustedColor,
+                  const color bearExhaustedColor)
 {
-   if(!enabled)
-      return;
-
    const int barsTotal = iBars(_Symbol, tf);
    if(barsTotal < 4)
       return;
 
-   const int limit = MathMin(barsTotal - 3, FVGLookbackBars + 2);
+   int scannedBars = MathMin(MaxBarsToScan, barsTotal - 2);
+   int count = 0;
 
-   for(int i = 0; i < limit; i++)
+   for(int idx = 0; idx < scannedBars && count < MaxFVGPerTF; idx++)
    {
-      const datetime leftTime = iTime(_Symbol, tf, i + 2);
-      const datetime rightTime = iTime(_Symbol, tf, i);
-      if(rightTime <= 0 || leftTime <= 0)
-         continue;
-
-      const double currLow  = iLow(_Symbol, tf, i);
-      const double currHigh = iHigh(_Symbol, tf, i);
-      const double prevLow  = iLow(_Symbol, tf, i + 2);
-      const double prevHigh = iHigh(_Symbol, tf, i + 2);
-
-      if(bullish)
+      if(ShowBullishFVG)
       {
-         if(currLow <= prevHigh)
-            continue;
+         double zoneTop = 0.0;
+         double zoneBottom = 0.0;
+         datetime timeLeft = 0;
+         datetime timeRight = 0;
 
-         const double zoneTop    = MathMax(prevHigh, currLow);
-         const double zoneBottom = MathMin(prevHigh, currLow);
-         const bool exhausted = IsZoneExhausted(tf, i, true, zoneBottom, zoneTop);
-         const color zoneColor = exhausted ? BullishExhaustedColor : colorForTF;
-
-         CreateFVGObject(tf, true, leftTime, rightTime, zoneTop, zoneBottom, zoneColor);
+         if(IsBullishFVG(tf, idx, zoneTop, zoneBottom, timeLeft, timeRight))
+         {
+            const bool exhausted = HighlightExhausted && IsZoneExhausted(tf, idx, true, zoneBottom, zoneTop);
+            const color zoneColor = exhausted ? bullExhaustedColor : bullColor;
+            CreateFVGObject(tf, true, idx, timeLeft, timeRight, zoneTop, zoneBottom, zoneColor);
+            count++;
+            if(count >= MaxFVGPerTF)
+               break;
+         }
       }
-      else
+
+      if(ShowBearishFVG)
       {
-         if(currHigh >= prevLow)
-            continue;
+         double zoneTop = 0.0;
+         double zoneBottom = 0.0;
+         datetime timeLeft = 0;
+         datetime timeRight = 0;
 
-         const double zoneTop    = MathMax(prevLow, currHigh);
-         const double zoneBottom = MathMin(prevLow, currHigh);
-         const bool exhausted = IsZoneExhausted(tf, i, false, zoneBottom, zoneTop);
-         const color zoneColor = exhausted ? BearishExhaustedColor : colorForTF;
-
-         CreateFVGObject(tf, false, leftTime, rightTime, zoneTop, zoneBottom, zoneColor);
+         if(IsBearishFVG(tf, idx, zoneTop, zoneBottom, timeLeft, timeRight))
+         {
+            const bool exhausted = HighlightExhausted && IsZoneExhausted(tf, idx, false, zoneBottom, zoneTop);
+            const color zoneColor = exhausted ? bearExhaustedColor : bearColor;
+            CreateFVGObject(tf, false, idx, timeLeft, timeRight, zoneTop, zoneBottom, zoneColor);
+            count++;
+            if(count >= MaxFVGPerTF)
+               break;
+         }
       }
    }
 }
 
-bool IsZoneExhausted(const int tf, const int startIndex, const bool bullish, const double zoneBottom, const double zoneTop)
+bool IsBullishFVG(const int tf,
+                  const int idx,
+                  double &zoneTop,
+                  double &zoneBottom,
+                  datetime &leftTime,
+                  datetime &rightTime)
 {
-   if(!HighlightExhausted)
-      return false;
+   if(idx + 2 >= iBars(_Symbol, tf))
+      return(false);
 
-   const int maxCheck = MathMin(ExhaustionCheckBars, iBars(_Symbol, tf) - startIndex - 1);
-   if(maxCheck <= 0)
-      return false;
+   const double barLow = iLow(_Symbol, tf, idx);
+   const double highOfEarlierBar = iHigh(_Symbol, tf, idx + 2);
 
-   for(int j = startIndex + 1; j <= startIndex + maxCheck; j++)
+   if(barLow <= highOfEarlierBar)
+      return(false);
+
+   zoneTop = barLow;
+   zoneBottom = highOfEarlierBar;
+   leftTime = iTime(_Symbol, tf, idx + 2);
+   rightTime = iTime(_Symbol, tf, idx);
+   return(true);
+}
+
+bool IsBearishFVG(const int tf,
+                  const int idx,
+                  double &zoneTop,
+                  double &zoneBottom,
+                  datetime &leftTime,
+                  datetime &rightTime)
+{
+   if(idx + 2 >= iBars(_Symbol, tf))
+      return(false);
+
+   const double barHigh = iHigh(_Symbol, tf, idx);
+   const double lowOfEarlierBar = iLow(_Symbol, tf, idx + 2);
+
+   if(barHigh >= lowOfEarlierBar)
+      return(false);
+
+   zoneTop = lowOfEarlierBar;
+   zoneBottom = barHigh;
+   leftTime = iTime(_Symbol, tf, idx + 2);
+   rightTime = iTime(_Symbol, tf, idx);
+   return(true);
+}
+
+bool IsZoneExhausted(const int tf,
+                     const int idx,
+                     const bool bullish,
+                     const double zoneBottom,
+                     const double zoneTop)
+{
+   const int barsLimit = iBars(_Symbol, tf);
+   if(barsLimit <= idx + 1)
+      return(false);
+
+   const int checkUntil = MathMin(barsLimit - 1, idx + ExhaustionBars);
+   for(int j = idx + 1; j <= checkUntil; j++)
    {
       const double closePrice = iClose(_Symbol, tf, j);
       if(bullish)
       {
          if(closePrice <= zoneBottom)
-            return true;
+            return(true);
       }
       else
       {
          if(closePrice >= zoneTop)
-            return true;
+            return(true);
       }
    }
 
-   return false;
+   return(false);
 }
 
 void CreateFVGObject(const int tf,
-                    const bool bullish,
-                    const datetime leftTime,
-                    const datetime rightTime,
-                    const double topPrice,
-                    const double bottomPrice,
-                    const color zoneColor)
+                     const bool bullish,
+                     const int idx,
+                     const datetime timeLeft,
+                     const datetime timeRight,
+                     const double zoneTop,
+                     const double zoneBottom,
+                     const color objColor)
 {
-   string name = StringFormat("%sTF%ld_%s_%ld_%ld", g_prefix, tf, bullish ? "B" : "S", leftTime, rightTime);
+   string name = StringFormat("%sTF%d_%s_%d", gPrefix, tf, bullish ? "B" : "S", idx);
 
    if(ObjectFind(0, name) >= 0)
       return;
 
-   const bool created = ObjectCreate(0, name, OBJ_RECTANGLE, 0, leftTime, topPrice, rightTime, bottomPrice);
-   if(!created)
+   double topY = zoneTop;
+   double bottomY = zoneBottom;
+
+   if(!ObjectCreate(0, name, OBJ_RECTANGLE, 0, timeLeft, topY, timeRight, bottomY))
       return;
 
    ObjectSetInteger(0, name, OBJPROP_BACK, true);
    ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
    ObjectSetInteger(0, name, OBJPROP_SELECTED, false);
    ObjectSetInteger(0, name, OBJPROP_HIDDEN, true);
-   ObjectSetInteger(0, name, OBJPROP_COLOR, zoneColor);
-   ObjectSetInteger(0, name, OBJPROP_WIDTH, FVGBorderWidth);
+   ObjectSetInteger(0, name, OBJPROP_COLOR, objColor);
+   ObjectSetInteger(0, name, OBJPROP_WIDTH, BorderWidth);
    ObjectSetInteger(0, name, OBJPROP_FILL, FillZones ? 1 : 0);
-   ObjectSetInteger(0, name, OBJPROP_BGCOLOR, SetAlphaColor(zoneColor, FillTransparency));
+   ObjectSetInteger(0, name, OBJPROP_BGCOLOR, MakeAlphaColor(objColor, FillAlpha));
    ObjectSetInteger(0, name, OBJPROP_BORDER_TYPE, BORDER_TYPE_FLAT);
    ObjectSetInteger(0, name, OBJPROP_STYLE, STYLE_SOLID);
 }
 
-color SetAlphaColor(const color baseColor, const int alpha)
+color MakeAlphaColor(const color baseColor, const int alpha)
 {
-   const int a = MathMax(0, MathMin(255, alpha));
+   int a = alpha;
+   if(a < 0)
+      a = 0;
+   if(a > 255)
+      a = 255;
+
    const int r = GetRValue(baseColor);
    const int g = GetGValue(baseColor);
    const int b = GetBValue(baseColor);
-   return(color)((a << 24) | (r << 16) | (g << 8) | b);
-}
 
-// END OF FILE
+   return(color)(((a & 0xFF) << 24) | ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF));
+}
